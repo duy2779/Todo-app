@@ -1,0 +1,198 @@
+{% extends 'frontend/base.html' %}
+{% block content %}
+    <div id="task-container">
+        <div id="form-wrapper">
+            <form id="form">
+                <div class="flex-wrapper">
+                    <div style="flex:6">
+                        <input type="text" id="title" class="form-control"
+                        name="title" placeholder="Add task">
+                    </div>
+                    <div style="flex:1">
+                        <input id="submit" class="btn" type="submit" value="Submit" disabled>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="list-wrapper">
+
+        </div>
+    </div>
+
+    </div>
+
+    <script type="text/javascript">
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+    var activeItem = null
+
+    var user_id = "{{ user.id }}"
+
+    var list_snapshot = []
+    var is_authenticated ="{{ user.is_authenticated }}"
+
+    if(is_authenticated=="{{True}}"){
+        console.log('Logged')
+        buildList()
+        document.getElementById('submit').disabled =false
+    }
+
+    function buildList(){
+        var wrapper = document.getElementById('list-wrapper')
+        //wrapper.innerHTML = ''
+
+        var url = 'http://127.0.0.1:8000/api/task-list/'
+
+        fetch(url)
+        .then((resp) => resp.json())
+        .then(function(data){
+            console.log('Data:', data)
+
+            var list = data
+            for (var i in list) {
+
+                try{
+                    document.getElementById(`data-row-${i}`).remove()
+                }catch(err){
+
+                }
+
+                var title = `<span class="title">${list[i].title}</span>`
+                if(list[i].complete == true){
+                    title = `<strike class="title">${list[i].title}</strike>`
+                }
+
+                var item = `
+                    <div id="data-row-${i}" class="task-wrapper flex-wrapper">
+                        <div style="flex:7">
+                            ${title}
+                        </div>
+                        <div style="flex:1">
+                            <button class="btn btn-sm btn-outline-info edit">Edit</button>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-dark delete">-</button>
+                        </div>
+                    </div>
+                `
+                wrapper.innerHTML+= item
+
+            }
+
+            if(list_snapshot.length>list.length){
+                for(var i = list.length; i<list_snapshot.length; i++){
+                    document.getElementById(`data-row-${i}`).remove()
+                }
+            }
+
+            list_snapshot = list
+
+            for (var i in list) {
+                var editBtn = document.getElementsByClassName('edit')[i]
+                var deleteBtn = document.getElementsByClassName('delete')[i]
+                var title = document.getElementsByClassName('title')[i]
+                
+                editBtn.addEventListener('click', (function(item){
+                    return function(){
+                        editItem(item)
+                    }
+                })(list[i]))
+
+                deleteBtn.addEventListener('click', (function(item){
+                    return function(){
+                        deleteItem(item)
+                    }
+                })(list[i]))
+
+                title.addEventListener('click', (function(item){
+                    return function(){
+                        strikeUnstrike(item)
+                    }
+                })(list[i]))
+            }
+        })
+    }
+
+    var form = document.getElementById('form-wrapper')
+    form.addEventListener('submit',function(e){
+        e.preventDefault()//Now nothing will happen , form won't submit
+        console.log('Form submitted')
+        var url = 'http://127.0.0.1:8000/api/task-create/'
+
+        if(activeItem != null){
+            console.log('edit')
+            var url = `http://127.0.0.1:8000/api/task-update/${activeItem.id}/`
+            activeItem = null
+        }
+
+        var title = document.getElementById('title').value
+        
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken':csrftoken,
+            },
+            body:JSON.stringify({'title':title,'user':user_id})
+        }
+        ).then(function(response){
+            buildList()
+            document.getElementById('form').reset()
+        })
+    })
+
+    function editItem(item){
+        console.log('Item clicked:',item.title)
+        activeItem = item
+        document.getElementById('title').value = activeItem.title
+    }
+
+    function deleteItem(item){
+        console.log('Item delete:',item.title)
+        fetch(`http://127.0.0.1:8000/api/task-delete/${item.id}/`,{
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken':csrftoken,
+            }
+        }).then((response)=>{
+            buildList()
+        })
+    }
+
+    function strikeUnstrike(item){
+        console.log('strike clicked:',item.title)
+
+        item.complete = !item.complete
+
+        fetch(`http://127.0.0.1:8000/api/task-update/${item.id}/`,{
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken':csrftoken,
+            },
+            body: JSON.stringify({'title':item.title, 'complete':item.complete, 'user':user_id})
+        }).then((response)=>{
+            buildList()
+        })
+    }
+
+    </script>
+{% endblock content %}
